@@ -8,6 +8,11 @@ const nextConfig = {
           process.env.NODE_ENV === "development"
             ? "http://127.0.0.1:8000/api/py/:path*"
             : "/api/",
+        has: [{
+          type: 'header',
+          key: 'Connection',
+          value: 'keep-alive'
+        }]
       },
       {
         source: "/docs",
@@ -25,6 +30,15 @@ const nextConfig = {
       },
     ];
   },
+  experimental: {
+    proxyTimeout: 300000,
+    serverActions: {
+      bodySizeLimit: '50mb',
+    },
+  },
+  httpAgentOptions: {
+    keepAlive: true
+  }
 };
 
 module.exports = nextConfig;
