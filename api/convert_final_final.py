@@ -1,6 +1,6 @@
 from __future__ import annotations
 from pydantic import BaseModel
-from typing import Literal, Any, Union
+from typing import Literal, Any, Union, Optional
 from bs4.element import PageElement, NavigableString, Tag
 from marker.converters.pdf import PdfConverter
 from marker.models import create_model_dict
@@ -8,8 +8,6 @@ from marker.output import json_to_html
 from bs4 import BeautifulSoup
 import tempfile
 from uuid import uuid4
-
-# TODO NEED TO HANDLE <a> tag, LINKS
 
 ProseMirrorNodeTypeString = Literal[
     "math",
@@ -31,7 +29,7 @@ ProseMirrorNodeTypeString = Literal[
 ]
 
 ProseMirrorMarkTypeString = Literal[
-    "bold", "italic", "superscript", "color", "strikethrough"
+    "bold", "italic", "superscript", "color", "strikethrough", "link"
 ]
 
 PAGE_BREAK_SENTINEL = "$$PAGEBREAK$$"
@@ -48,12 +46,21 @@ class ProseMirrorTextNode(BaseModel):
     text: str
     marks: list[ProseMirrorMark] = []
 
+    def get_text(self) -> list[str]:
+        return [self.text]
+
 
 class ProseMirrorContainerNode(BaseModel):
     type: ProseMirrorNodeTypeString
     attrs: dict[str, Any] = {}
     content: list[ProseMirrorNode] = []
     marks: list[ProseMirrorMark] = []
+
+    def get_text(self) -> list[str]:
+        result = []
+        for child in self.content:
+            result.extend(child.get_text())
+        return result
 
 
 ProseMirrorNode = Union[ProseMirrorTextNode, ProseMirrorContainerNode]
@@ -71,14 +78,14 @@ NODE_TYPE_MAP = {
     "td": "tableCell",
     "img": "image",
     "ul": "bulletList",
-    "listGroup": "bulletList",
     "li": "listItem",
+    "ListItem": "listItem",
     "blockquote": "blockQuote",
     "Equation": "math",
     "Text": "text",
     "b": "text",
     "i": "text",
-    "a": "link",
+    "a": "text",
 }
 
 
@@ -92,11 +99,15 @@ def get_node_type(element: Tag) -> ProseMirrorNodeTypeString:
 def get_node_marks(element: Tag) -> list[ProseMirrorMark]:
     marks = []
     if element.name == "b":
-        marks.append({"type": "bold"})
+        marks.append(ProseMirrorMark(type="bold"))
     elif element.name == "i":
-        marks.append({"type": "italic"})
+        marks.append(ProseMirrorMark(type="italic"))
     elif element.name == "sup":
-        marks.append({"type": "superscript"})
+        marks.append(ProseMirrorMark(type="superscript"))
+    elif element.name == "a":
+        marks.append(
+            ProseMirrorMark(type="link", attrs={"href": element.get("href", "")})
+        )
     return marks
 
 
@@ -117,52 +128,128 @@ def convert_element(element: PageElement) -> ProseMirrorNode:
     elif node_type == "codeBlock":
         language = element.get("class", [""])[0].replace("language-", "")
         attrs["language"] = language
-    elif node_type == "link":
-        attrs["href"] = element.get("href", "")
     return ProseMirrorContainerNode(type=node_type, attrs=attrs, content=content)
+
+
+def flatten_nodes(nodes: list[ProseMirrorNode]) -> list[ProseMirrorNode]:
+    flattened = []
+    for node in nodes:
+        if isinstance(node, ProseMirrorContainerNode):
+            node.content = flatten_nodes(node.content)
+            if node.type == "skip":
+                flattened.extend(node.content)
+                continue
+        else:
+            if not node.text:
+                continue
+        flattened.append(node)
+    return flattened
+
+
+def create_top_level_paragraphs(nodes: list[ProseMirrorNode]):
+    for i, node in enumerate(nodes):
+        if isinstance(node, ProseMirrorTextNode):
+            nodes[i] = ProseMirrorContainerNode(type="paragraph", content=[node])
+
+
+def html_to_prosemirror(html: BeautifulSoup) -> list[ProseMirrorNode]:
+    nodes = [convert_element(e) for e in html.children]
+    nodes = flatten_nodes(nodes)
+    create_top_level_paragraphs(nodes)
+    return nodes
 
 
 _converter = None
 
 
-def __create_html():
+def _get_converter() -> PdfConverter:
+    global _converter
+    if _converter is None:
+        _converter = PdfConverter(
+            artifact_dict=create_model_dict(),
+            renderer="marker.renderers.json.JSONRenderer",
+        )
+    return _converter
 
-    def _get_converter() -> PdfConverter:
-        global _converter
-        if _converter is None:
-            _converter = PdfConverter(
-                artifact_dict=create_model_dict(),
-                renderer="marker.renderers.json.JSONRenderer",
-            )
-        return _converter
 
-    def pdf_to_html(pdf: bytes) -> BeautifulSoup:
-        converter = _get_converter()
-        with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
-            temp_file.write(pdf)
-            temp_file.flush()
-            rendered = converter(temp_file.name)
-        html = ""
-        for block in rendered.children:
-            html += (
-                json_to_html(block) + f'<div block_type="{PAGE_BREAK_SENTINEL}"></div>'
-            )
+def pdf_to_html(pdf: bytes) -> BeautifulSoup:
+    converter = _get_converter()
+    with tempfile.NamedTemporaryFile(suffix=".pdf") as temp_file:
+        temp_file.write(pdf)
+        temp_file.flush()
+        rendered = converter(temp_file.name)
+    html = ""
+    for block in rendered.children:
+        html += json_to_html(block) + f'<div block_type="{PAGE_BREAK_SENTINEL}"></div>'
 
-        return BeautifulSoup(html, "html.parser")
+    return BeautifulSoup(html, "html.parser")
 
-    with open("cleanup.pdf", "rb") as f:
-        html = pdf_to_html(f.read())
 
-    with open("converted.html", "w+") as f:
-        f.write(str(html))
+def convert(pdf: bytes) -> dict[str, Any]:
+    html = pdf_to_html(pdf)
+    nodes = html_to_prosemirror(html)
+    return {"type": "doc", "content": [node.model_dump() for node in nodes]}
+
+
+def query_node_text(
+    text: str, nodes: list[ProseMirrorNode]
+) -> Optional[ProseMirrorNode]:
+    for node in nodes:
+        node_text = node.get_text()
+        if text in node_text or text in "".join(node_text):
+            if isinstance(node, ProseMirrorContainerNode):
+                deeper = query_node_text(text, node.content)
+                if deeper is not None:
+                    return deeper
+                return node
+    return None
+
+
+def get_element_text(element: PageElement) -> list[str]:
+    if isinstance(element, NavigableString):
+        return [element.text]
+    result = []
+    for child in element.children:
+        result.extend(get_element_text(child))
+    return result
+
+
+def query_element_text(text: str, elements: list[PageElement]) -> Optional[PageElement]:
+    for element in elements:
+        element_text = get_element_text(element)
+        if text in "".join(element_text):
+            if text in element_text and isinstance(element, Tag):
+                return query_element_text(text, element.contents)
+            else:
+                return element
+    return None
+
+
+def query_all_node_text(
+    text: str, nodes: list[ProseMirrorNode]
+) -> list[ProseMirrorNode]:
+    found = []
+    for node in nodes:
+        node_text = node.get_text()
+        if text in node_text or text in "".join(node_text):
+            if isinstance(node, ProseMirrorContainerNode):
+                deeper = query_all_node_text(text, node.content)
+                if deeper:
+                    found.extend(deeper)
+                else:
+                    found.append(node)
+    return found
 
 
 if __name__ == "__main__":
-    # __create_html()
-
     with open("converted.html", "r") as f:
-        html = BeautifulSoup(f.read(), "html.parser")
+        html = BeautifulSoup(f.read())
+        nodes = html_to_prosemirror(html)
 
-    elements = list(html.children)
-    nodes = [html_to_prosemirror(e) for e in elements]
-    x = 0
+        search_text = "As a user, I want to convert the recorded steps into"
+        node = query_node_text(search_text, nodes)
+        element = query_element_text(search_text, html.contents)
+
+        raw_nodes = [convert_element(e) for e in html.children]
+        raw_node = query_node_text(search_text, raw_nodes)
+        x = 0
