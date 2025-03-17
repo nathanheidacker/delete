@@ -82,10 +82,11 @@ NODE_TYPE_MAP = {
     "ListItem": "listItem",
     "blockquote": "blockQuote",
     "Equation": "math",
-    "Text": "text",
+    "Text": "skip",
     "b": "text",
     "i": "text",
     "a": "text",
+    "sup": "text",
 }
 
 
@@ -111,30 +112,69 @@ def get_node_marks(element: Tag) -> list[ProseMirrorMark]:
     return marks
 
 
-def convert_element(element: PageElement) -> ProseMirrorNode:
-    attrs = {"id": str(uuid4())}
+def is_inline_element(element: PageElement) -> bool:
     if isinstance(element, NavigableString):
-        return ProseMirrorContainerNode(
-            type="paragraph",
-            content=[ProseMirrorTextNode(text=element.text, attrs=attrs)],
-        )
-    node_type = get_node_type(element)
-    if node_type == "text":
-        marks = get_node_marks(element)
-        return ProseMirrorContainerNode(
-            type="paragraph",
-            content=[ProseMirrorTextNode(text=element.text, attrs=attrs, marks=marks)],
-        )
-    child_elements = list(element.children)
-    content = [convert_element(child) for child in child_elements]
-    if node_type == "heading":
-        attrs["level"] = int(element.name[1])
-    elif node_type == "math":
-        attrs["formula"] = element.find("math").get_text().strip()
-    elif node_type == "codeBlock":
-        language = element.get("class", [""])[0].replace("language-", "")
-        attrs["language"] = language
-    return ProseMirrorContainerNode(type=node_type, attrs=attrs, content=content)
+        return True
+    return element.name in ["b", "a", "i", "sup"]
+
+
+def convert_inline_elements(elements: list[PageElement]) -> list[ProseMirrorTextNode]:
+    nodes = []
+    for element in elements:
+        attrs = {"id": str(uuid4())}
+        if isinstance(element, NavigableString):
+            node = ProseMirrorTextNode(text=element.text, attrs=attrs)
+        else:
+            marks = get_node_marks(element)
+            node = ProseMirrorTextNode(text=element.text, marks=marks, attrs=attrs)
+        nodes.append(node)
+    return nodes
+
+
+def convert_elements(elements: list[PageElement]) -> list[ProseMirrorContainerNode]:
+    # Handle grouping of inline elements
+    grouped = []
+    group = []
+    for element in elements:
+        if is_inline_element(element):
+            group.append(element)
+        else:
+            if group:
+                grouped.append(group)
+                group = []
+            grouped.append(element)
+    if group:
+        grouped.append(group)
+
+    # Conversion to nodes
+    nodes = []
+    for group in grouped:
+        attrs = {"id": str(uuid4())}
+        if isinstance(group, list):
+            content = convert_inline_elements(group)
+
+            # Some node types other than paragraph accept inline elements directly
+            if get_node_type(group[0].parent) in ["heading"]:
+                return content
+
+            node = ProseMirrorContainerNode(
+                type="paragraph", attrs=attrs, content=content
+            )
+        else:
+            node_type = get_node_type(group)
+            content = convert_elements(group.contents)
+            if node_type == "heading":
+                attrs["level"] = int(group.name[1])
+            elif node_type == "math":
+                attrs["formula"] = group.find("math").get_text().strip()
+            elif node_type == "codeBlock":
+                language = group.get("class", [""])[0].replace("language-", "")
+                attrs["language"] = language
+            node = ProseMirrorContainerNode(
+                type=node_type, attrs=attrs, content=content
+            )
+        nodes.append(node)
+    return nodes
 
 
 def flatten_nodes(nodes: list[ProseMirrorNode]) -> list[ProseMirrorNode]:
@@ -152,16 +192,9 @@ def flatten_nodes(nodes: list[ProseMirrorNode]) -> list[ProseMirrorNode]:
     return flattened
 
 
-def create_top_level_paragraphs(nodes: list[ProseMirrorNode]):
-    for i, node in enumerate(nodes):
-        if isinstance(node, ProseMirrorTextNode):
-            nodes[i] = ProseMirrorContainerNode(type="paragraph", content=[node])
-
-
 def html_to_prosemirror(html: BeautifulSoup) -> list[ProseMirrorNode]:
-    nodes = [convert_element(e) for e in html.children]
+    nodes = convert_elements(list(html.children))
     nodes = flatten_nodes(nodes)
-    create_top_level_paragraphs(nodes)
     return nodes
 
 
@@ -255,7 +288,4 @@ if __name__ == "__main__":
         search_text = "Workspace manager and editor would"
         node = query_node_text(search_text, nodes)
         element = query_element_text(search_text, html.contents)
-
-        raw_nodes = [convert_element(e) for e in html.children]
-        raw_node = query_node_text(search_text, raw_nodes)
         x = 0

@@ -1,6 +1,7 @@
 from fastapi import FastAPI, File, UploadFile
 from .utils import util
 from .convert_final_final import convert
+from .convert_last import convert as convert2
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -43,7 +44,7 @@ app.add_middleware(
 async def process_pdf(pdf_bytes):
     """Process PDF in background"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, convert, pdf_bytes)
+    return await loop.run_in_executor(None, convert2, pdf_bytes)
 
 
 @app.get("/api/py/helloFastApi")

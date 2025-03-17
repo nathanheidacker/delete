@@ -1,46 +1,45 @@
 "use client";
 
 import { useEditor, EditorContent, JSONContent } from "@tiptap/react";
-import { Node, mergeAttributes } from '@tiptap/core'
-import { HTMLAttributes } from '@tiptap/core'
-import Document from '@tiptap/extension-document'
-import Paragraph, { ParagraphOptions } from '@tiptap/extension-paragraph'
-import Text from '@tiptap/extension-text'
-import BulletList, { BulletListOptions } from '@tiptap/extension-bullet-list'
-import OrderedList from '@tiptap/extension-ordered-list'
-import ListItem, { ListItemOptions } from '@tiptap/extension-list-item'
-import Heading, { HeadingOptions } from '@tiptap/extension-heading'
-import CodeBlock, { CodeBlockOptions } from '@tiptap/extension-code-block'
-import Image from '@tiptap/extension-image'
-import Table from '@tiptap/extension-table'
-import TableRow from '@tiptap/extension-table-row'
-import TableCell from '@tiptap/extension-table-cell'
-import TableHeader from '@tiptap/extension-table-header'
-import Bold from '@tiptap/extension-bold'
-import Italic from '@tiptap/extension-italic'
-import Strike from '@tiptap/extension-strike'
-import Underline from '@tiptap/extension-underline'
-import TextStyle from '@tiptap/extension-text-style'
-import Color from '@tiptap/extension-color'
-import Highlight from '@tiptap/extension-highlight'
-import Superscript from '@tiptap/extension-superscript'
-import Blockquote from '@tiptap/extension-blockquote'
-import katex from 'katex'
-import 'katex/dist/katex.min.css'
+import { Node, mergeAttributes } from "@tiptap/core";
+import Document from "@tiptap/extension-document";
+import Paragraph, { ParagraphOptions } from "@tiptap/extension-paragraph";
+import Text from "@tiptap/extension-text";
+import BulletList, { BulletListOptions } from "@tiptap/extension-bullet-list";
+import OrderedList from "@tiptap/extension-ordered-list";
+import ListItem, { ListItemOptions } from "@tiptap/extension-list-item";
+import Heading, { HeadingOptions } from "@tiptap/extension-heading";
+import CodeBlock, { CodeBlockOptions } from "@tiptap/extension-code-block";
+import Image from "@tiptap/extension-image";
+import Table from "@tiptap/extension-table";
+import TableRow from "@tiptap/extension-table-row";
+import TableCell from "@tiptap/extension-table-cell";
+import TableHeader from "@tiptap/extension-table-header";
+import Bold from "@tiptap/extension-bold";
+import Italic from "@tiptap/extension-italic";
+import Strike from "@tiptap/extension-strike";
+import Underline from "@tiptap/extension-underline";
+import TextStyle from "@tiptap/extension-text-style";
+import Color from "@tiptap/extension-color";
+import Highlight from "@tiptap/extension-highlight";
+import Superscript from "@tiptap/extension-superscript";
+import Blockquote from "@tiptap/extension-blockquote";
+import katex from "katex";
+import "katex/dist/katex.min.css";
 import { useEffect } from "react";
-import { v4 as uuidv4 } from 'uuid';
-import Link from '@tiptap/extension-link'
+import { v4 as uuidv4 } from "uuid";
+import Link from "@tiptap/extension-link";
 
 interface NodeAttributes {
     id: string | null;
 }
 
 interface HTMLElementWithNodeId extends HTMLElement {
-    getAttribute(name: 'data-node-id'): string | null;
+    getAttribute(name: "data-node-id"): string | null;
 }
 
 interface HTMLElementWithFormula extends HTMLElement {
-    getAttribute(name: 'data-formula'): string;
+    getAttribute(name: "data-formula"): string;
 }
 
 interface MathAttributes {
@@ -56,20 +55,20 @@ interface RenderHTMLProps {
 
 // Define Math as a proper Node extension
 const Math = Node.create({
-    name: 'math',
-    group: 'block',
+    name: "math",
+    group: "block",
     atom: true,
 
     addAttributes() {
         return {
             formula: {
-                default: '',
-                parseHTML: element => element.getAttribute('data-formula'),
-                renderHTML: attributes => ({
-                    'data-formula': attributes.formula,
+                default: "",
+                parseHTML: (element) => element.getAttribute("data-formula"),
+                renderHTML: (attributes) => ({
+                    "data-formula": attributes.formula,
                 }),
             },
-        }
+        };
     },
 
     parseHTML() {
@@ -77,22 +76,29 @@ const Math = Node.create({
             {
                 tag: 'div[data-type="math"]',
             },
-        ]
+        ];
     },
 
     renderHTML({ node, HTMLAttributes }) {
-        const formula = node.attrs.formula
-        const html = katex.renderToString(formula || '', {
+        const formula = node.attrs.formula;
+        const html = katex.renderToString(formula || "", {
             throwOnError: false,
             displayMode: true,
-            output: 'html',
-            strict: false
-        })
-        const container = document.createElement('div')
-        container.innerHTML = html
-        return ['div', mergeAttributes(HTMLAttributes, { 'data-type': 'math', class: 'math-block' }), container.firstChild]
+            output: "html",
+            strict: false,
+        });
+        const container = document.createElement("div");
+        container.innerHTML = html;
+        return [
+            "div",
+            mergeAttributes(HTMLAttributes, {
+                "data-type": "math",
+                class: "math-block",
+            }),
+            container.firstChild,
+        ];
     },
-})
+});
 
 interface EditorProps {
     content: JSONContent;
@@ -101,36 +107,39 @@ interface EditorProps {
 }
 
 const defaultContent: JSONContent = {
-    type: 'doc',
-    content: [{
-        type: 'paragraph',
-        content: [{ type: 'text', text: '' }]
-    }]
+    type: "doc",
+    content: [
+        {
+            type: "paragraph",
+            content: [{ type: "text", text: "" }],
+        },
+    ],
 };
 
 function isValidContent(content: JSONContent): boolean {
     return (
         content &&
-        typeof content === 'object' &&
-        content.type === 'doc' &&
+        typeof content === "object" &&
+        content.type === "doc" &&
         Array.isArray(content.content)
     );
 }
 
-const hoverColor = 'bg-blue-50';
+const hoverColor = "bg-blue-50";
 
 const addNodeId = () => ({
     id: {
         default: null,
-        parseHTML: (element: HTMLElementWithNodeId) => element.getAttribute('data-node-id'),
+        parseHTML: (element: HTMLElementWithNodeId) =>
+            element.getAttribute("data-node-id"),
         renderHTML: (attributes: NodeAttributes) => {
             const id = attributes.id || uuidv4();
             return {
-                'data-node-id': id,
-                'data-node-tooltip': `Node ID: ${id}`
-            }
-        }
-    }
+                "data-node-id": id,
+                "data-node-tooltip": `Node ID: ${id}`,
+            };
+        },
+    },
 });
 
 export function Editor({ content, onChange, className }: EditorProps) {
@@ -139,45 +148,45 @@ export function Editor({ content, onChange, className }: EditorProps) {
             Document,
             Paragraph.configure({
                 HTMLAttributes: {
-                    class: `notion-block p-3 my-1 rounded-md hover:${hoverColor} transition-colors duration-100`
+                    class: `notion-block p-3 my-1 rounded-md hover:${hoverColor} transition-colors duration-100`,
                 },
                 addAttributes() {
                     return addNodeId();
                 },
                 renderHTML({ HTMLAttributes }: RenderHTMLProps) {
-                    return ['p', mergeAttributes(HTMLAttributes)]
-                }
+                    return ["p", mergeAttributes(HTMLAttributes)];
+                },
             } as Partial<ParagraphOptions>),
             Text,
             Bold.configure({
                 HTMLAttributes: {
-                    class: 'font-bold'
-                }
+                    class: "font-bold",
+                },
             }),
             Italic.configure({
                 HTMLAttributes: {
-                    class: 'italic'
-                }
+                    class: "italic",
+                },
             }),
             Strike.configure({
                 HTMLAttributes: {
-                    class: 'line-through'
-                }
+                    class: "line-through",
+                },
             }),
             Underline.configure({
                 HTMLAttributes: {
-                    class: 'underline'
-                }
+                    class: "underline",
+                },
             }),
             Superscript.configure({
                 HTMLAttributes: {
-                    class: 'superscript'
-                }
+                    class: "superscript",
+                },
             }),
             Blockquote.configure({
                 HTMLAttributes: {
-                    class: 'notion-blockquote pl-4 border-l-4 border-gray-300 my-2 py-1'
-                }
+                    class: "notion-blockquote pl-4 border-l-4 border-gray-300 my-2 py-1",
+                },
             }),
             TextStyle,
             Color,
@@ -186,145 +195,132 @@ export function Editor({ content, onChange, className }: EditorProps) {
             }),
             BulletList.configure({
                 HTMLAttributes: {
-                    class: `notion-list py-1 my-0.5 rounded-md hover:${hoverColor} transition-colors duration-100`
+                    class: `notion-list py-1 my-0.5 rounded-md hover:${hoverColor} transition-colors duration-100`,
                 },
                 addAttributes() {
                     return addNodeId();
                 },
-                renderHTML({ HTMLAttributes }) {
-                    return ['ul', mergeAttributes(HTMLAttributes)]
-                }
+                renderHTML({ HTMLAttributes }: RenderHTMLProps) {
+                    return ["ul", mergeAttributes(HTMLAttributes)];
+                },
             } as Partial<BulletListOptions>),
             OrderedList.configure({
                 HTMLAttributes: {
-                    class: `notion-list py-1 my-0.5 rounded-md hover:${hoverColor} transition-colors duration-100`
-                }
+                    class: `notion-list py-1 my-0.5 rounded-md hover:${hoverColor} transition-colors duration-100`,
+                },
             }),
             ListItem.configure({
                 HTMLAttributes: {
-                    class: `notion-list-item py-0.5 px-2 hover:${hoverColor} transition-colors duration-100`
+                    class: `notion-list-item py-0.5 px-2 hover:${hoverColor} transition-colors duration-100`,
                 },
                 addAttributes() {
                     return addNodeId();
                 },
-                renderHTML({ HTMLAttributes }) {
-                    return ['li', mergeAttributes(HTMLAttributes)]
-                }
+                renderHTML({ HTMLAttributes }: RenderHTMLProps) {
+                    return ["li", mergeAttributes(HTMLAttributes)];
+                },
             } as Partial<ListItemOptions>),
             Heading.configure({
                 levels: [1, 2],
                 HTMLAttributes: {
-                    class: `notion-heading py-2 my-1 rounded-md transition-colors duration-100`
+                    class: `notion-heading py-2 my-1 rounded-md transition-colors duration-100`,
                 },
                 addAttributes() {
                     return {
                         ...addNodeId(),
                         level: {
-                            default: 1
-                        }
+                            default: 1,
+                        },
                     };
                 },
-                renderHTML({ node, HTMLAttributes }) {
-                    return [`h${node.attrs.level}`, mergeAttributes(HTMLAttributes)]
-                }
+                renderHTML({ node, HTMLAttributes }: RenderHTMLProps) {
+                    return [
+                        `h${node!.attrs.level}`,
+                        mergeAttributes(HTMLAttributes),
+                    ];
+                },
             } as Partial<HeadingOptions>),
             CodeBlock.configure({
                 HTMLAttributes: {
-                    class: 'notion-code-block bg-gray-900 text-white font-mono p-4 rounded-lg my-2'
+                    class: "notion-code-block bg-gray-900 text-white font-mono p-4 rounded-lg my-2",
                 },
                 addAttributes() {
                     return {
                         ...addNodeId(),
                         language: {
-                            default: null
-                        }
+                            default: null,
+                        },
                     };
                 },
-                renderHTML({ HTMLAttributes }) {
-                    return ['pre', mergeAttributes(HTMLAttributes)]
-                }
+                renderHTML({ HTMLAttributes }: RenderHTMLProps) {
+                    return ["pre", mergeAttributes(HTMLAttributes)];
+                },
             } as Partial<CodeBlockOptions>),
             Image.configure({
                 HTMLAttributes: {
-                    class: 'notion-image max-w-full rounded-lg my-2'
+                    class: "notion-image max-w-full rounded-lg my-2",
                 },
                 allowBase64: true,
             }),
             Table.configure({
                 HTMLAttributes: {
-                    class: 'notion-table min-w-full border-collapse my-4'
-                }
+                    class: "notion-table min-w-full border-collapse my-4",
+                },
             }),
             TableRow.configure({
                 HTMLAttributes: {
-                    class: 'notion-table-row'
-                }
+                    class: "notion-table-row",
+                },
             }),
             TableHeader.configure({
                 HTMLAttributes: {
-                    class: `notion-table-header ${hoverColor} font-semibold p-2 border border-gray-200`
-                }
+                    class: `notion-table-header ${hoverColor} font-semibold p-2 border border-gray-200`,
+                },
             }),
             TableCell.configure({
                 HTMLAttributes: {
-                    class: 'notion-table-cell p-2 border border-gray-200'
-                }
+                    class: "notion-table-cell p-2 border border-gray-200",
+                },
             }),
             Math.configure({
                 HTMLAttributes: {
-                    class: 'math-block'
+                    class: "math-block",
                 },
                 addAttributes() {
                     return {
                         id: {
                             default: null,
-                            parseHTML: (element: HTMLElementWithNodeId) => element.getAttribute('data-node-id'),
+                            parseHTML: (element: HTMLElementWithNodeId) =>
+                                element.getAttribute("data-node-id"),
                             renderHTML: (attributes: NodeAttributes) => {
                                 const id = attributes.id || uuidv4();
                                 return {
-                                    'data-node-id': id,
-                                    'data-node-tooltip': `Node ID: ${id}`
-                                }
-                            }
+                                    "data-node-id": id,
+                                    "data-node-tooltip": `Node ID: ${id}`,
+                                };
+                            },
                         },
                         formula: {
-                            default: ''
-                        }
-                    }
-                }
+                            default: "",
+                        },
+                    };
+                },
             }),
             Link.configure({
                 HTMLAttributes: {
-                    class: 'notion-link text-blue-600 hover:text-blue-800 hover:underline',
-                    target: '_blank',
-                    rel: 'noopener noreferrer'
-                },
-                addAttributes() {
-                    return {
-                        ...addNodeId(),
-                        href: {
-                            default: null
-                        },
-                        target: {
-                            default: '_blank'
-                        },
-                        rel: {
-                            default: 'noopener noreferrer'
-                        }
-                    }
-                },
-                renderHTML({ HTMLAttributes }) {
-                    return ['a', mergeAttributes(HTMLAttributes)]
+                    class: "notion-link text-blue-600 hover:text-blue-800 hover:underline",
+                    target: "_blank",
+                    rel: "noopener noreferrer",
                 },
                 openOnClick: false,
-                validate: href => /^https?:\/\//.test(href),
+                validate: (href) => /^https?:\/\//.test(href),
             }),
         ],
         content: isValidContent(content) ? content : defaultContent,
         editorProps: {
             attributes: {
-                class: 'notion-editor prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none bg-white text-black'
-            }
+                class: "notion-editor prose prose-sm sm:prose lg:prose-lg xl:prose-2xl mx-auto focus:outline-none bg-white text-black",
+            },
         },
         onUpdate: ({ editor }) => {
             try {
@@ -333,9 +329,9 @@ export function Editor({ content, onChange, className }: EditorProps) {
                     onChange?.(jsonContent);
                 }
             } catch (error) {
-                console.error('Failed to get editor content:', error);
+                console.error("Failed to get editor content:", error);
             }
-        }
+        },
     });
 
     // Update content when prop changes
@@ -344,15 +340,18 @@ export function Editor({ content, onChange, className }: EditorProps) {
             try {
                 if (isValidContent(content)) {
                     const currentContent = editor.getJSON();
-                    if (JSON.stringify(content) !== JSON.stringify(currentContent)) {
+                    if (
+                        JSON.stringify(content) !==
+                        JSON.stringify(currentContent)
+                    ) {
                         editor.commands.setContent(content, false);
                     }
                 } else {
-                    console.warn('Invalid content provided to Editor');
+                    console.warn("Invalid content provided to Editor");
                     editor.commands.setContent(defaultContent, false);
                 }
             } catch (error) {
-                console.error('Failed to update editor content:', error);
+                console.error("Failed to update editor content:", error);
                 editor.commands.setContent(defaultContent, false);
             }
         }
@@ -362,11 +361,13 @@ export function Editor({ content, onChange, className }: EditorProps) {
         <div className={`${className} notion-editor-wrapper max-w-4xl mx-auto`}>
             <style jsx global>{`
                 .notion-editor-wrapper {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",
+                        Roboto, Oxygen, Ubuntu, Cantarell, "Open Sans",
+                        "Helvetica Neue", sans-serif;
                     background-color: white;
                     color: black;
                 }
-                
+
                 .notion-editor {
                     padding: 2rem 1rem;
                     background-color: white;
@@ -388,11 +389,11 @@ export function Editor({ content, onChange, className }: EditorProps) {
                 }
 
                 p.notion-block:hover {
-                    background-color: rgb(239, 246, 255);  /* blue-50 */
+                    background-color: rgb(239, 246, 255); /* blue-50 */
                 }
 
                 .notion-block:hover::before {
-                    content: '';
+                    content: "";
                     position: absolute;
                     left: -1rem;
                     top: 50%;
@@ -400,7 +401,7 @@ export function Editor({ content, onChange, className }: EditorProps) {
                     width: 0.25rem;
                     height: 0.25rem;
                     border-radius: 50%;
-                    background-color: #E5E7EB;
+                    background-color: #e5e7eb;
                 }
 
                 .notion-heading {
@@ -410,7 +411,7 @@ export function Editor({ content, onChange, className }: EditorProps) {
                 }
 
                 .notion-heading:hover {
-                    background-color: rgb(239, 246, 255);  /* blue-50 */
+                    background-color: rgb(239, 246, 255); /* blue-50 */
                 }
 
                 h1.notion-heading {
@@ -429,13 +430,13 @@ export function Editor({ content, onChange, className }: EditorProps) {
 
                 .notion-list-item {
                     position: relative;
-                    margin: 0;  /* Reduced from 0.2rem */
+                    margin: 0; /* Reduced from 0.2rem */
                 }
 
                 .notion-list-item::before {
-                    content: '';
+                    content: "";
                     position: absolute;
-                    left: -1.25rem;  /* Adjusted to match new padding */
+                    left: -1.25rem; /* Adjusted to match new padding */
                     top: 50%;
                     transform: translateY(-50%);
                 }
@@ -445,15 +446,15 @@ export function Editor({ content, onChange, className }: EditorProps) {
                 }
 
                 .notion-editor p.is-empty::before {
-                    content: 'Type something...';
-                    color: #9CA3AF;
+                    content: "Type something...";
+                    color: #9ca3af;
                     pointer-events: none;
                     float: left;
                     height: 0;
                 }
 
                 .notion-code-block {
-                    font-family: 'Fira Code', 'Consolas', monospace;
+                    font-family: "Fira Code", "Consolas", monospace;
                     line-height: 1.5;
                     tab-size: 2;
                     position: relative;
@@ -465,7 +466,7 @@ export function Editor({ content, onChange, className }: EditorProps) {
                     top: 0.5rem;
                     right: 1rem;
                     font-size: 0.75rem;
-                    color: #9CA3AF;
+                    color: #9ca3af;
                 }
 
                 .notion-table {
@@ -499,11 +500,11 @@ export function Editor({ content, onChange, className }: EditorProps) {
                 }
 
                 .math-block:hover {
-                    background-color: rgb(239, 246, 255);  /* blue-50 */
+                    background-color: rgb(239, 246, 255); /* blue-50 */
                 }
 
                 .notion-table-row:nth-child(even) {
-                    background-color: rgb(249, 250, 251);  /* gray-50 */
+                    background-color: rgb(249, 250, 251); /* gray-50 */
                 }
 
                 /* Text formatting styles */
@@ -600,13 +601,13 @@ export function Editor({ content, onChange, className }: EditorProps) {
 
                 /* Link styles */
                 .notion-link {
-                    color: rgb(37, 99, 235);  /* blue-600 */
+                    color: rgb(37, 99, 235); /* blue-600 */
                     text-decoration: none;
                     transition: all 0.2s ease;
                 }
 
                 .notion-link:hover {
-                    color: rgb(30, 64, 175);  /* blue-800 */
+                    color: rgb(30, 64, 175); /* blue-800 */
                     text-decoration: underline;
                 }
 
