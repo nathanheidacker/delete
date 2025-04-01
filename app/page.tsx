@@ -24,7 +24,10 @@ export default function Home() {
 
             {content && (
                 <div className="max-w-4xl mx-auto border rounded-lg shadow-sm">
-                    <Editor content={content} className="min-h-[500px] p-6" />
+                    <Editor
+                        content={content.nodes}
+                        className="min-h-[500px] p-6"
+                    />
                 </div>
             )}
         </main>

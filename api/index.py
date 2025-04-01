@@ -1,7 +1,6 @@
 from fastapi import FastAPI, File, UploadFile
-from .utils import util
-from .convert_final_final import convert
-from .convert_last import convert as convert2
+from .convert_last import convert as get_prosemirror
+from .agent_new import SuggestionAgent
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import StreamingResponse, JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -41,27 +40,32 @@ app.add_middleware(
 )
 
 
+async def convert(pdf_bytes):
+    agent = SuggestionAgent(version=2)
+    result = agent(pdf_bytes)
+    prosemirror = get_prosemirror(pdf_bytes)
+    markdown, suggestions = await result
+    return {"nodes": prosemirror, "markdown": markdown, "suggestions": suggestions}
+
+
 async def process_pdf(pdf_bytes):
     """Process PDF in background"""
     loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, convert2, pdf_bytes)
-
-
-@app.get("/api/py/helloFastApi")
-def hello_fast_api():
-    """This is a test!"""
-    return {"message": util()}
+    return await loop.run_in_executor(None, convert, pdf_bytes)
 
 
 @app.post("/api/py/convert")
-async def convert_pdf_to_markdown(file: UploadFile = File(...)):
+async def convert_pdf_to_prosemirror(file: UploadFile = File(...)):
     """Convert a PDF file to HTML"""
     # Read file in memory
     pdf_bytes = await file.read()
 
     try:
         # Process PDF with timeout
-        tiptap_doc = await asyncio.wait_for(process_pdf(pdf_bytes), timeout=300.0)
+        tiptap_doc = await asyncio.wait_for(convert(pdf_bytes), timeout=300.0)
+
+        with open("test_result.json", "w+") as f:
+            json.dump(tiptap_doc, f)
 
         # Return as streaming response to maintain connection
         async def generate():

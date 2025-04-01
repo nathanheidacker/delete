@@ -126,7 +126,9 @@ class AgentV2:
         problems = [
             dict(id=i, **problem) for i, problem in enumerate(problems.model_dump())
         ]
+        print("identified issues")
         actions = self.resolver.invoke({"prd": prd, "problems": problems})
+        print("identified resolutions")
 
         issues = {problem["id"]: problem for problem in problems}
         for action in actions.model_dump():
@@ -138,6 +140,7 @@ class AgentV2:
                 for issue in issues.values()
             ]
         )
+        print("identified suggestions")
         suggestions = [
             suggestion for group in suggestions for suggestion in group.model_dump()
         ]
